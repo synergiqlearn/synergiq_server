@@ -7,9 +7,14 @@
 - Removed the duplicate `RewardSchema.index({ user: 1 })` call
 - Kept `unique: true` and added `index: true` on the user field definition
 
-### 2. MongoDB URI Undefined Error
+### 2. MongoDB URI Undefined Error ✅
+**Fixed** by configuring environment variables in Railway dashboard (see Step 1 below)
 
-This error occurs because Railway cannot read the `.env` file. Environment variables must be configured in Railway's dashboard.
+### 3. Container Stopping with SIGTERM ✅
+**Fixed** by adding graceful shutdown handling:
+- Properly handles SIGTERM and SIGINT signals
+- Closes HTTP server and MongoDB connections cleanly
+- Prevents Railway from force-killing the container
 
 ## Railway Configuration Steps
 
