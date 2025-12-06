@@ -6,6 +6,7 @@ import {
   getMySkills,
   updateProgress,
   removeSkill,
+  searchSkills,
 } from '../controllers/skillController';
 import { protect } from '../middleware/auth';
 
@@ -13,6 +14,7 @@ const router = express.Router();
 
 // Public routes
 router.get('/', getSkills);
+router.get('/search', protect, searchSkills);
 
 // Protected routes
 router.get('/recommended', protect, getRecommendedSkills);

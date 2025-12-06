@@ -162,10 +162,10 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-// @desc    Update user profile
-// @route   PUT /api/auth/profile
+// @desc    Update user questionnaire profile
+// @route   PUT /api/auth/questionnaire
 // @access  Private
-export const updateProfile = async (
+export const updateQuestionnaireProfile = async (
   req: AuthRequest,
   res: Response
 ): Promise<void> => {
@@ -213,5 +213,130 @@ export const updateProfile = async (
       message: 'Server error',
       error: error.message,
     });
+  }
+};
+
+// @desc    Update user profile (name, email, bio)
+// @route   PUT /api/auth/profile
+// @access  Private
+export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, email, bio } = req.body;
+    const userId = req.user?._id;
+
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    // Check if email is being changed and if it's already taken
+    if (email && email !== user.email) {
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
+        res.status(400).json({ success: false, message: 'Email already in use' });
+        return;
+      }
+      user.email = email;
+    }
+
+    if (name) user.name = name;
+    if (bio !== undefined) user.bio = bio;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        bio: user.bio,
+        category: user.category,
+        profileCompleted: user.profileCompleted,
+        traits: user.traits,
+        aiInsights: user.aiInsights
+      },
+    });
+  } catch (error: any) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Change user password
+// @route   PUT /api/auth/change-password
+// @access  Private
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?._id;
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ success: false, message: 'Please provide current and new password' });
+      return;
+    }
+
+    const user = await User.findById(userId).select('+password');
+    
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    // Check current password
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      res.status(401).json({ success: false, message: 'Current password is incorrect' });
+      return;
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error: any) {
+    console.error('Change password error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Update notification preferences
+// @route   PUT /api/auth/notifications
+// @access  Private
+export const updateNotifications = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { notificationPreferences } = req.body;
+    const userId = req.user?._id;
+
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    user.notificationPreferences = notificationPreferences;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification preferences updated',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        notificationPreferences: user.notificationPreferences,
+      },
+    });
+  } catch (error: any) {
+    console.error('Update notifications error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };

@@ -405,3 +405,43 @@ export const getMyEvents = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+
+// @desc    Search events
+// @route   GET /api/events/search
+// @access  Private
+export const searchEvents = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string') {
+      res.status(400).json({
+        success: false,
+        message: 'Search query is required',
+      });
+      return;
+    }
+
+    const events = await Event.find({
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { type: { $regex: q, $options: 'i' } },
+        { organizer: { $regex: q, $options: 'i' } },
+      ],
+    })
+      .populate('createdBy', 'name email')
+      .sort({ date: 1 })
+      .limit(5);
+
+    res.status(200).json(events);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
+  }
+};

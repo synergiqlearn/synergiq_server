@@ -321,3 +321,31 @@ export const removeSkill = async (
     });
   }
 };
+
+// @desc    Search skills
+// @route   GET /api/skills/search
+// @access  Private
+export const searchSkills = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string') {
+      res.status(400).json({ success: false, message: 'Search query required' });
+      return;
+    }
+
+    const skills = await Skill.find({
+      isActive: true,
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { tags: { $in: [new RegExp(q, 'i')] } }
+      ]
+    }).limit(5);
+
+    res.status(200).json(skills);
+  } catch (error: any) {
+    console.error('Search skills error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};

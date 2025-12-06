@@ -652,3 +652,43 @@ export const deleteTask = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+
+// @desc    Search projects
+// @route   GET /api/projects/search
+// @access  Private
+export const searchProjects = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string') {
+      res.status(400).json({
+        success: false,
+        message: 'Search query is required',
+      });
+      return;
+    }
+
+    const projects = await Project.find({
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+        { category: { $regex: q, $options: 'i' } },
+        { tags: { $in: [new RegExp(q, 'i')] } },
+      ],
+    })
+      .populate('owner', 'name email')
+      .populate('members', 'name email')
+      .limit(5);
+
+    res.status(200).json(projects);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
+  }
+};

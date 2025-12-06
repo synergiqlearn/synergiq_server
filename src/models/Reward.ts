@@ -169,7 +169,6 @@ const RewardSchema = new Schema<IReward>({
     ref: 'User',
     required: true,
     unique: true,
-    index: true,
   },
   activities: [ActivitySchema],
   coupons: [CouponSchema],
@@ -205,6 +204,7 @@ const RewardSchema = new Schema<IReward>({
 }, { timestamps: true });
 
 // Indexes for performance
+RewardSchema.index({ user: 1 });
 RewardSchema.index({ 'coupons.status': 1 });
 RewardSchema.index({ 'coupons.expiresAt': 1 });
 

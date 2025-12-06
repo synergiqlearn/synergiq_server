@@ -11,6 +11,7 @@ import {
   updateTask,
   deleteTask,
   getRecommendedProjects,
+  searchProjects,
 } from '../controllers/projectController';
 import { protect } from '../middleware/auth';
 
@@ -21,6 +22,7 @@ router.use(protect);
 
 // Special routes (must be before /:id)
 router.get('/recommended', getRecommendedProjects);
+router.get('/search', searchProjects);
 
 // Project routes
 router.route('/').get(getAllProjects).post(createProject);
