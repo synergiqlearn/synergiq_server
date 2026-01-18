@@ -3,7 +3,7 @@ import QuestionnaireResponse from '../models/Questionnaire';
 import User from '../models/User';
 import { AuthRequest } from '../middleware/auth';
 import { questions } from '../data/questions';
-import { adaptiveQuestionTree, getNextQuestion, calculateCategory } from '../data/adaptiveQuestions';
+import { adaptiveQuestionTree, getAllAdaptiveQuestions, getQuestionTraitCoverage, getQuestionVariant, calculateCategory } from '../data/adaptiveQuestions';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize Gemini AI
@@ -160,8 +160,10 @@ export const submitQuestionnaire = async (
     );
 
     // Save questionnaire response
-    const questionnaireResponse = await QuestionnaireResponse.create({
+    await QuestionnaireResponse.create({
       userId: req.user?._id,
+      kind: 'legacy',
+      category,
       responses: processedResponses,
       scores,
     });
@@ -220,13 +222,57 @@ export const getResults = async (
     res.status(200).json({
       success: true,
       result: {
+        kind: (result as any).kind,
+        category: (result as any).category,
         scores: result.scores,
+        traits: (result as any).traits,
+        analysis: (result as any).analysis,
+        aiInsights: (result as any).aiInsights,
         completedAt: result.completedAt,
         responses: result.responses,
       },
     });
   } catch (error: any) {
     console.error('Get results error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message,
+    });
+  }
+};
+
+// @desc    Get user's latest adaptive questionnaire results
+// @route   GET /api/profile/adaptive/results
+// @access  Private
+export const getAdaptiveResults = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const result = await QuestionnaireResponse.findOne({
+      userId: req.user?._id,
+      kind: 'adaptive',
+    }).sort({ createdAt: -1 });
+
+    if (!result) {
+      res.status(404).json({
+        success: false,
+        message: 'No adaptive questionnaire results found',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      category: (result as any).category,
+      scores: result.scores,
+      traits: (result as any).traits,
+      analysis: (result as any).analysis,
+      aiInsights: (result as any).aiInsights,
+    });
+  } catch (error: any) {
+    console.error('Get adaptive results error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -246,17 +292,25 @@ export const getAdaptiveStart = async (
 ): Promise<void> => {
   try {
     const startQuestion = adaptiveQuestionTree['start'];
+    const variant = getQuestionVariant(startQuestion);
+    const MIN_QUESTIONS = 10;
+    const MAX_QUESTIONS = 18;
     
     res.status(200).json({
       success: true,
       question: {
         id: startQuestion.id,
-        text: startQuestion.text,
+        text: variant.text,
         category: startQuestion.category,
-        description: startQuestion.description,
+        description: variant.description,
+        variantId: variant.variantId,
         options: startQuestion.options.map(opt => ({
           text: opt.text,
         }))
+      },
+      meta: {
+        minQuestions: MIN_QUESTIONS,
+        maxQuestions: MAX_QUESTIONS
       }
     });
   } catch (error: any) {
@@ -277,7 +331,7 @@ export const getAdaptiveNext = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { currentQuestionId, selectedOptionIndex } = req.body;
+    const { currentQuestionId, selectedOptionIndex, responses } = req.body;
 
     console.log('=== getAdaptiveNext called ===');
     console.log('currentQuestionId:', currentQuestionId);
@@ -314,29 +368,130 @@ export const getAdaptiveNext = async (
       return;
     }
 
-    // If nextQuestionId is null, questionnaire is complete
-    if (!selectedOption.nextQuestionId) {
-      console.log('Questionnaire COMPLETED!');
+    const incomingResponses = Array.isArray(responses) ? responses : [];
+    const hasCurrentInResponses = incomingResponses.some(
+      (resp: any) => resp.questionId === currentQuestionId && resp.selectedOptionIndex === selectedOptionIndex
+    );
+    const updatedResponses = hasCurrentInResponses
+      ? incomingResponses
+      : [...incomingResponses, { questionId: currentQuestionId, selectedOptionIndex }];
+
+    const MIN_QUESTIONS = 10;
+    const MAX_QUESTIONS = 18;
+    const CONFIDENCE_THRESHOLD = 3;
+
+    const scores = {
+      Explorer: 0,
+      Achiever: 0,
+      Strategist: 0,
+      Practitioner: 0,
+    };
+
+    const traits = {
+      analytical: 0,
+      creative: 0,
+      social: 0,
+      practical: 0,
+      detail_oriented: 0,
+      big_picture: 0,
+      independent: 0,
+      collaborative: 0,
+      theoretical: 0,
+      experimental: 0,
+    };
+
+    const askedQuestionIds = new Set<string>();
+    const categoryCounts: Record<string, number> = {};
+    const traitCounts: Record<string, number> = {};
+
+    updatedResponses.forEach((resp: any) => {
+      const question = adaptiveQuestionTree[resp.questionId];
+      if (!question) return;
+      askedQuestionIds.add(question.id);
+      categoryCounts[question.category] = (categoryCounts[question.category] || 0) + 1;
+
+      const option = question.options[resp.selectedOptionIndex];
+      if (option?.scores) {
+        Object.keys(option.scores).forEach((category) => {
+          const key = category as keyof typeof scores;
+          scores[key] += option.scores?.[key] || 0;
+        });
+      }
+
+      if (option?.traits) {
+        Object.keys(option.traits).forEach((trait) => {
+          const key = trait as keyof typeof traits;
+          if (key in traits) {
+            traits[key] += option.traits?.[key] || 0;
+            traitCounts[key] = (traitCounts[key] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    const sortedScores = Object.entries(scores).sort(([, a], [, b]) => b - a);
+    const confidence = (sortedScores[0]?.[1] || 0) - (sortedScores[1]?.[1] || 0);
+    const answeredCount = updatedResponses.length;
+
+    if ((answeredCount >= MIN_QUESTIONS && confidence >= CONFIDENCE_THRESHOLD) || answeredCount >= MAX_QUESTIONS) {
+      console.log('Questionnaire COMPLETED by confidence/limit!');
       res.status(200).json({
         success: true,
         completed: true,
         message: 'Questionnaire completed!',
+        meta: {
+          answeredCount,
+          minQuestions: MIN_QUESTIONS,
+          maxQuestions: MAX_QUESTIONS,
+          confidence
+        }
       });
       return;
     }
 
-    // Get next question
-    const nextQuestion = adaptiveQuestionTree[selectedOption.nextQuestionId];
-    console.log('Next question found:', nextQuestion?.id);
-    
-    if (!nextQuestion) {
-      console.log('ERROR: Next question not found in tree:', selectedOption.nextQuestionId);
-      res.status(404).json({
-        success: false,
-        message: 'Next question not found',
+    const allQuestions = getAllAdaptiveQuestions();
+    const remainingQuestions = allQuestions.filter((q) => !askedQuestionIds.has(q.id));
+
+    if (remainingQuestions.length === 0) {
+      res.status(200).json({
+        success: true,
+        completed: true,
+        message: 'No more questions available',
+        meta: {
+          answeredCount,
+          minQuestions: MIN_QUESTIONS,
+          maxQuestions: MAX_QUESTIONS,
+          confidence
+        }
       });
       return;
     }
+
+    const categoryCoverage = Object.values(categoryCounts);
+    const minCategoryCount = categoryCoverage.length ? Math.min(...categoryCoverage) : 0;
+
+    const lowTraitKeys = Object.entries(traits)
+      .filter(([, value]) => value <= 1)
+      .map(([trait]) => trait);
+
+    const nextQuestionIdHint = selectedOption?.nextQuestionId;
+
+    const scoredCandidates = remainingQuestions.map((q) => {
+      const coverageTraits = getQuestionTraitCoverage(q);
+      let score = 0;
+      if (!categoryCounts[q.category]) score += 3;
+      if ((categoryCounts[q.category] || 0) === minCategoryCount) score += 2;
+      coverageTraits.forEach((trait) => {
+        if (lowTraitKeys.includes(trait)) score += 1.5;
+      });
+      if (q.id === nextQuestionIdHint) score += 2;
+      score += Math.random();
+      return { question: q, score };
+    });
+
+    scoredCandidates.sort((a, b) => b.score - a.score);
+    const nextQuestion = scoredCandidates[0].question;
+    const variant = getQuestionVariant(nextQuestion);
 
     console.log('Returning next question successfully');
     res.status(200).json({
@@ -344,12 +499,19 @@ export const getAdaptiveNext = async (
       completed: false,
       question: {
         id: nextQuestion.id,
-        text: nextQuestion.text,
+        text: variant.text,
         category: nextQuestion.category,
-        description: nextQuestion.description,
+        description: variant.description,
+        variantId: variant.variantId,
         options: nextQuestion.options.map(opt => ({
           text: opt.text,
         }))
+      },
+      meta: {
+        answeredCount,
+        minQuestions: MIN_QUESTIONS,
+        maxQuestions: MAX_QUESTIONS,
+        confidence
       }
     });
   } catch (error: any) {
@@ -443,41 +605,57 @@ export const submitAdaptiveQuestionnaire = async (
     console.log('Generating AI analysis for user:', req.user!._id);
     const aiInsights = await generateAIAnalysis(processedResponses, scores, traits, category);
 
-    await QuestionnaireResponse.create({
-      userId: req.user!._id,
-      responses: processedResponses,
-      scores,
-    });
-
-    await User.findByIdAndUpdate(req.user!._id, {
-      category,
-      profileCompleted: true,
-    });
-
     const topTraits = Object.entries(traits)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
       .map(([trait]) => trait);
+
+    const analysis = {
+      primaryCategory: category,
+      topTraits,
+    };
+
+    const resolvedAiInsights = aiInsights || {
+      personalityProfile: `You are a ${category} learner with strong ${topTraits.join(', ')} traits.`,
+      learningPath: 'Personalized Learning Path',
+      strengths: topTraits,
+      growthAreas: ['Consistency', 'Practice'],
+      studyStrategies: ['Regular practice', 'Build projects', 'Collaborate with peers'],
+      projectSuggestions: ['Full-stack app', 'Open source contribution'],
+      careerPath: 'Software Engineering and Development',
+      motivationalTips: ['Stay consistent', 'Keep learning']
+    };
+
+    await QuestionnaireResponse.create({
+      userId: req.user!._id,
+      kind: 'adaptive',
+      category,
+      responses: processedResponses,
+      scores,
+      traits,
+      analysis,
+      aiInsights: resolvedAiInsights,
+    });
+
+    const aiSummaryParts: string[] = [];
+    if (resolvedAiInsights?.personalityProfile) aiSummaryParts.push(resolvedAiInsights.personalityProfile);
+    if (resolvedAiInsights?.learningPath) aiSummaryParts.push(`Learning Path: ${resolvedAiInsights.learningPath}`);
+    const aiInsightsSummary = aiSummaryParts.filter(Boolean).join('\n\n');
+
+    await User.findByIdAndUpdate(req.user!._id, {
+      category,
+      profileCompleted: true,
+      traits,
+      aiInsights: aiInsightsSummary || undefined,
+    });
 
     res.status(201).json({
       success: true,
       category,
       scores,
       traits,
-      analysis: {
-        primaryCategory: category,
-        topTraits,
-      },
-      aiInsights: aiInsights || {
-        personalityProfile: `You are a ${category} learner with strong ${topTraits.join(', ')} traits.`,
-        learningPath: 'Personalized Learning Path',
-        strengths: topTraits,
-        growthAreas: ['Consistency', 'Practice'],
-        studyStrategies: ['Regular practice', 'Build projects', 'Collaborate with peers'],
-        projectSuggestions: ['Full-stack app', 'Open source contribution'],
-        careerPath: 'Software Engineering and Development',
-        motivationalTips: ['Stay consistent', 'Keep learning']
-      }
+      analysis,
+      aiInsights: resolvedAiInsights,
     });
   } catch (error: any) {
     console.error('Submit adaptive error:', error);

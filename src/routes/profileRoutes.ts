@@ -5,6 +5,7 @@ import {
   getResults,
   getAdaptiveStart,
   getAdaptiveNext,
+  getAdaptiveResults,
   submitAdaptiveQuestionnaire,
 } from '../controllers/profileController';
 import { protect } from '../middleware/auth';
@@ -19,6 +20,7 @@ router.get('/results', protect, getResults);
 // Adaptive questionnaire routes
 router.get('/adaptive/start', protect, getAdaptiveStart);
 router.post('/adaptive/next', protect, getAdaptiveNext);
+router.get('/adaptive/results', protect, getAdaptiveResults);
 router.post('/adaptive/submit', protect, submitAdaptiveQuestionnaire);
 
 export default router;

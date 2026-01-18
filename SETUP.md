@@ -45,3 +45,27 @@ curl http://localhost:5000/health
 - POST http://localhost:5000/api/auth/login
 - GET  http://localhost:5000/api/auth/me (protected)
 - PUT  http://localhost:5000/api/auth/profile (protected)
+
+---
+
+# 🚀 Deploy on Render
+
+## Render settings
+
+- **Build Command**: `npm ci && npm run build`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/health`
+
+## Required environment variables (Render Dashboard)
+
+- `MONGODB_URI` (MongoDB Atlas connection string)
+- `JWT_SECRET`
+- `GEMINI_API_KEY`
+
+## Recommended environment variables
+
+- `NODE_ENV=production`
+- `CLIENT_URL` (your frontend URL for CORS, e.g. `https://your-app.onrender.com`)
+
+Notes:
+- Render will provide `PORT` automatically; the server already uses `process.env.PORT`.

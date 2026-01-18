@@ -141,7 +141,6 @@ export const createSession = async (req: AuthRequest, res: Response) => {
 // @access  Private
 export const updateSession = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
     const { code, input, title, language } = req.body;
 
     const session = await CodingSession.findById(req.params.id);

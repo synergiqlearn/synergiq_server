@@ -266,24 +266,40 @@ export const getRecommendedResources = async (
 
     const { type, difficulty, page = 1, limit = 12 } = req.query;
 
-    const query: any = {
-      category: { $in: [userCategory, 'All'] },
-    };
-
-    if (type) query.type = type;
-    if (difficulty) query.difficulty = difficulty;
-
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
 
-    const resources = await Resource.find(query)
+    const categoryQuery: any = { category: userCategory };
+    if (type) categoryQuery.type = type;
+    if (difficulty) categoryQuery.difficulty = difficulty;
+
+    const allQuery: any = { category: 'All' };
+    if (type) allQuery.type = type;
+    if (difficulty) allQuery.difficulty = difficulty;
+
+    const categoryResources = await Resource.find(categoryQuery)
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
 
-    const total = await Resource.countDocuments(query);
+    const remaining = Math.max(0, limitNum - categoryResources.length);
+    const fallbackResources = remaining
+      ? await Resource.find({
+          ...allQuery,
+          _id: { $nin: categoryResources.map((r) => r._id) },
+        })
+          .populate('createdBy', 'name email')
+          .sort({ createdAt: -1 })
+          .limit(remaining)
+      : [];
+
+    const resources = [...categoryResources, ...fallbackResources];
+
+    const total = await Resource.countDocuments({
+      category: { $in: [userCategory, 'All'] },
+    });
 
     res.status(200).json({
       success: true,

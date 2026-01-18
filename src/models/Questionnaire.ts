@@ -13,6 +13,8 @@ export interface IQuestion {
 
 export interface IQuestionnaireResponse extends Document {
   userId: mongoose.Types.ObjectId;
+  kind?: 'legacy' | 'adaptive';
+  category?: 'Explorer' | 'Achiever' | 'Strategist' | 'Practitioner';
   responses: {
     questionId: string;
     answer: string;
@@ -24,6 +26,9 @@ export interface IQuestionnaireResponse extends Document {
     Strategist: number;
     Practitioner: number;
   };
+  traits?: Record<string, number>;
+  analysis?: any;
+  aiInsights?: any;
   completedAt: Date;
 }
 
@@ -33,6 +38,17 @@ const QuestionnaireResponseSchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    kind: {
+      type: String,
+      enum: ['legacy', 'adaptive'],
+      default: 'legacy',
+      index: true,
+    },
+    category: {
+      type: String,
+      enum: ['Explorer', 'Achiever', 'Strategist', 'Practitioner'],
+      index: true,
     },
     responses: [
       {
@@ -46,6 +62,18 @@ const QuestionnaireResponseSchema: Schema = new Schema(
       Achiever: { type: Number, default: 0 },
       Strategist: { type: Number, default: 0 },
       Practitioner: { type: Number, default: 0 },
+    },
+    traits: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+    analysis: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+    aiInsights: {
+      type: Schema.Types.Mixed,
+      default: undefined,
     },
     completedAt: {
       type: Date,

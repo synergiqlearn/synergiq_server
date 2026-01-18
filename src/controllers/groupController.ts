@@ -12,7 +12,7 @@ export const getGroups = async (req: AuthRequest, res: Response) => {
     const { category, search, myGroups } = req.query;
     const userId = req.user?.id;
 
-    let query: any = { isPublic: true };
+    const query: any = { isPublic: true };
 
     // Filter by category
     if (category && category !== 'all') {
@@ -223,7 +223,7 @@ export const getGroupMessages = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    let query: any = { 
+    const query: any = { 
       group: id,
       deletedAt: { $exists: false }
     };

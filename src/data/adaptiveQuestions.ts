@@ -32,6 +32,11 @@ export interface AdaptiveQuestion {
   options: AdaptiveOption[];
 }
 
+export interface AdaptiveQuestionVariant {
+  text: string;
+  description?: string;
+}
+
 // Decision Tree Structure
 export const adaptiveQuestionTree: { [key: string]: AdaptiveQuestion } = {
   // START: Learning Style Discovery
@@ -454,6 +459,90 @@ export const adaptiveQuestionTree: { [key: string]: AdaptiveQuestion } = {
       }
     ]
   }
+};
+
+// Optional variant pool per question to increase novelty while keeping scoring consistent
+export const adaptiveQuestionVariants: Record<string, AdaptiveQuestionVariant[]> = {
+  start: [
+    { text: 'How do you prefer to learn new technical concepts?' },
+    { text: 'When you learn a new topic, what works best for you?' },
+    { text: 'Which learning style helps you grasp concepts fastest?' }
+  ],
+  deep_reading: [
+    { text: 'When reading technical content, you tend to...' },
+    { text: 'While studying docs, you usually...' },
+    { text: 'Your reading approach is typically to...' }
+  ],
+  visual_learning: [
+    { text: 'After watching a tutorial, you typically...' },
+    { text: 'When you finish a video lesson, you often...' },
+    { text: 'Your usual next step after a tutorial is...' }
+  ],
+  hands_on: [
+    { text: 'When starting a new project, you...' },
+    { text: 'At the start of a project, you usually...' },
+    { text: 'Your first move on a new project is to...' }
+  ],
+  social_learning: [
+    { text: 'When learning with others, you prefer to...' },
+    { text: 'In group learning, you usually...' },
+    { text: 'When collaborating to learn, you tend to...' }
+  ],
+  problem_solving: [
+    { text: 'When you encounter a bug, your first instinct is to...' },
+    { text: 'If something breaks, you typically...' },
+    { text: 'When debugging, you start by...' }
+  ],
+  time_management: [
+    { text: 'How do you usually manage your learning time?' },
+    { text: 'Which time-management style fits you best?' },
+    { text: 'Your study schedule is usually...' }
+  ],
+  motivation_type: [
+    { text: 'What motivates you most when learning?' },
+    { text: 'Your main learning motivation is...' },
+    { text: 'You feel most driven when...' }
+  ],
+  practice_approach: [
+    { text: 'When practicing coding, you prefer...' },
+    { text: 'Your practice style is mostly...' },
+    { text: 'You like to practice by...' }
+  ],
+  challenge_response: [
+    { text: 'When a task is challenging, you...' },
+    { text: 'Your response to difficult problems is to...' },
+    { text: 'When things get hard, you tend to...' }
+  ],
+  stress_response: [
+    { text: 'When under study pressure, you...' },
+    { text: 'Stress during learning makes you...' },
+    { text: 'In high-pressure situations, you usually...' }
+  ]
+};
+
+export const getAllAdaptiveQuestions = (): AdaptiveQuestion[] =>
+  Object.values(adaptiveQuestionTree);
+
+export const getQuestionTraitCoverage = (question: AdaptiveQuestion): string[] => {
+  const traitSet = new Set<string>();
+  question.options.forEach((opt) => {
+    Object.keys(opt.traits || {}).forEach((trait) => traitSet.add(trait));
+  });
+  return Array.from(traitSet);
+};
+
+export const getQuestionVariant = (question: AdaptiveQuestion) => {
+  const variants = adaptiveQuestionVariants[question.id];
+  if (!variants || variants.length === 0) {
+    return { text: question.text, description: question.description, variantId: 0 };
+  }
+  const variantId = Math.floor(Math.random() * variants.length);
+  const variant = variants[variantId];
+  return {
+    text: variant.text || question.text,
+    description: variant.description ?? question.description,
+    variantId
+  };
 };
 
 // Helper function to get next question

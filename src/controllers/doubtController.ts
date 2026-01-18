@@ -9,7 +9,7 @@ export const getDoubts = async (req: AuthRequest, res: Response) => {
   try {
     const { category, tags, search, resolved, sortBy = 'recent' } = req.query;
 
-    let query: any = {};
+    const query: any = {};
 
     // Filter by category
     if (category && category !== 'all') {

@@ -19,6 +19,29 @@ const COUPON_VALUES = {
   large: 100,  // ₹100
 };
 
+// Monetary value per 1 coupon point.
+// Keep this aligned with COUPON_VALUES so coupon redemption can correctly deduct points.
+const RUPEES_PER_COUPON_POINT = 5;
+
+const generateUniqueCouponCode = async (rewardDoc: any): Promise<string> => {
+  // RewardSchema has a generateCouponCode() method.
+  // We also need global uniqueness because `coupons.code` is indexed as unique.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const code = String(rewardDoc.generateCouponCode()).toUpperCase();
+
+    if (rewardDoc.coupons?.some((c: any) => c.code === code)) {
+      continue;
+    }
+
+    const exists = await Reward.exists({ 'coupons.code': code });
+    if (!exists) {
+      return code;
+    }
+  }
+
+  throw new Error('Failed to generate a unique coupon code');
+};
+
 // Get user's reward summary
 export const getMyRewards = async (req: AuthRequest, res: Response) => {
   try {
@@ -61,7 +84,12 @@ export const getMyRewards = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching rewards:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    const message = error instanceof Error ? error.message : 'Server error';
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      ...(process.env.NODE_ENV !== 'production' ? { debug: message } : {}),
+    });
   }
 };
 
@@ -134,9 +162,9 @@ export const addActivity = async (req: AuthRequest, res: Response) => {
     reward.totalCouponsEarned += couponsEarned;
     reward.availableCoupons += couponsEarned;
 
-    // Auto-generate physical coupons based on earned amount
+    // Auto-generate redeemable coupon codes based on earned coupon points
     // Generate coupons in denominations (₹100, ₹50, ₹25)
-    let remainingValue = couponsEarned * 10; // Each "coupon point" = ₹10 value
+    let remainingValue = couponsEarned * RUPEES_PER_COUPON_POINT;
     
     while (remainingValue >= COUPON_VALUES.small) {
       let couponValue: number;
@@ -148,17 +176,8 @@ export const addActivity = async (req: AuthRequest, res: Response) => {
         couponValue = COUPON_VALUES.small;
       }
 
-      // Generate unique coupon code
-      let couponCode: string;
-      let isUnique = false;
-      while (!isUnique) {
-        couponCode = reward.generateCouponCode();
-        // Check if code already exists
-        const existing = reward.coupons.find(c => c.code === couponCode);
-        if (!existing) {
-          isUnique = true;
-        }
-      }
+      // Generate globally-unique coupon code
+      const couponCode = await generateUniqueCouponCode(reward);
 
       // Add coupon
       reward.coupons.push({
@@ -184,7 +203,12 @@ export const addActivity = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error adding activity:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    const message = error instanceof Error ? error.message : 'Server error';
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      ...(process.env.NODE_ENV !== 'production' ? { debug: message } : {}),
+    });
   }
 };
 
@@ -273,7 +297,11 @@ export const redeemCoupon = async (req: AuthRequest, res: Response) => {
     coupon.status = CouponStatus.REDEEMED;
     coupon.redeemedAt = new Date();
     reward.totalCouponsRedeemed += 1;
-    reward.availableCoupons = Math.max(0, reward.availableCoupons - 1);
+
+    // Deduct coupon points based on redeemed rupee value.
+    // With RUPEES_PER_COUPON_POINT=5 and denominations 25/50/100, this is always an integer.
+    const pointsSpent = Math.max(1, Math.round(coupon.amount / RUPEES_PER_COUPON_POINT));
+    reward.availableCoupons = Math.max(0, reward.availableCoupons - pointsSpent);
 
     await reward.save();
 

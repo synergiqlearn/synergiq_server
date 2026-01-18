@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: synergiq-server
+    env: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set these in the Render dashboard (do not commit secrets):
+      # - MONGODB_URI
+      # - JWT_SECRET
+      # - GEMINI_API_KEY
+      # - CLIENT_URL

@@ -35,15 +35,55 @@ export const getRecommendedProjects = async (req: AuthRequest, res: Response) =>
       .populate('members', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limitNum)
+      .limit(limitNum * 3)
       .lean();
 
-    // Prioritize projects from users with same category
-    const sortedProjects = projects.sort((a: any, b: any) => {
-      const aMatch = a.owner?.category === userCategory ? 1 : 0;
-      const bMatch = b.owner?.category === userCategory ? 1 : 0;
-      return bMatch - aMatch;
+    const categoryKeywordMap: Record<string, string[]> = {
+      Explorer: ['ai', 'ml', 'data', 'blockchain', 'research', 'game', 'innovation'],
+      Achiever: ['web', 'frontend', 'backend', 'full stack', 'fullstack', 'mobile', 'cloud', 'devops', 'performance'],
+      Strategist: ['system', 'architecture', 'security', 'cyber', 'scalable', 'design', 'cloud'],
+      Practitioner: ['app', 'automation', 'tool', 'iot', 'mobile', 'web']
+    };
+
+    const normalize = (value?: string) => (value || '').toLowerCase();
+    const userKeywords = categoryKeywordMap[userCategory] || [];
+
+    const withScores = projects.map((project: any) => {
+      let score = 0;
+      if (project.owner?.category === userCategory) score += 3;
+
+      const categoryText = normalize(project.category);
+      const tagsText = normalize(Array.isArray(project.tags) ? project.tags.join(' ') : '');
+      const combinedText = `${categoryText} ${tagsText}`.trim();
+
+      if (userKeywords.some((kw) => categoryText.includes(kw))) score += 2;
+      if (userKeywords.some((kw) => combinedText.includes(kw))) score += 1;
+
+      return { ...project, __score: score };
     });
+
+    const shuffle = (arr: any[]) => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    const grouped = withScores.reduce<Record<number, any[]>>((acc, p) => {
+      const key = p.__score || 0;
+      acc[key] = acc[key] || [];
+      acc[key].push(p);
+      return acc;
+    }, {});
+
+    const sortedScores = Object.keys(grouped)
+      .map((k) => parseInt(k, 10))
+      .sort((a, b) => b - a);
+
+    const ordered = sortedScores.flatMap((score) => shuffle(grouped[score]));
+    const sortedProjects = ordered.slice(0, limitNum).map(({ __score, ...rest }) => rest);
 
     const total = await Project.countDocuments(query);
 

@@ -27,28 +27,10 @@ connectDB();
 
 const app: Application = express();
 
-// CORS configuration - handle Vercel preview deployments and production
+// Middleware
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    // Allow localhost for development
-    if (origin.includes('localhost')) return callback(null, true);
-    
-    // Allow all Vercel deployments (production and preview)
-    if (origin.includes('vercel.app')) return callback(null, true);
-    
-    // Allow custom CLIENT_URL from environment
-    if (process.env.CLIENT_URL && origin === process.env.CLIENT_URL.replace(/\/$/, '')) {
-      return callback(null, true);
-    }
-    
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -87,7 +69,7 @@ app.use((req: Request, res: Response) => {
 });
 
 // Error handler
-app.use((err: any, req: Request, res: Response, next: any) => {
+app.use((err: any, req: Request, res: Response, _next: any) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
     success: false,

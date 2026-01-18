@@ -12,12 +12,7 @@ export interface IUser extends Document {
     interests?: string[];
     goals?: string[];
   };
-  traits?: {
-    curiosity?: number;
-    goal_orientation?: number;
-    planning?: number;
-    hands_on?: number;
-  };
+  traits?: Record<string, number>;
   aiInsights?: string;
   notificationPreferences?: {
     emailNotifications?: boolean;
@@ -48,7 +43,7 @@ const UserSchema: Schema = new Schema(
       lowercase: true,
       trim: true,
       match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         'Please provide a valid email',
       ],
     },
@@ -72,10 +67,8 @@ const UserSchema: Schema = new Schema(
       goals: [String],
     },
     traits: {
-      curiosity: Number,
-      goal_orientation: Number,
-      planning: Number,
-      hands_on: Number,
+      type: Schema.Types.Mixed,
+      default: undefined,
     },
     aiInsights: {
       type: String,

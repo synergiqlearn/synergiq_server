@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
 import UserSkill from '../models/UserSkill';
-import Project from '../models/Project';
-import Event from '../models/Event';
 import { AuthRequest } from '../middleware/auth';
 
 // Get user analytics stats
@@ -107,15 +105,14 @@ const getCategoryDistribution = async (userId: string) => {
 };
 
 // Get weekly progress (last 7 days)
-const getWeeklyProgress = async (userId: string) => {
+const getWeeklyProgress = async (_userId: string) => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const today = new Date().getDay();
   
   // Reorder to start from Monday
   const orderedDays = [...days.slice(1), days[0]];
   
   // Mock data for now - would need activity tracking
-  return orderedDays.map((day, index) => ({
+  return orderedDays.map((day) => ({
     day,
     hours: Math.random() * 5 + 1, // 1-6 hours
     skills: Math.floor(Math.random() * 4) + 1 // 1-4 skills
@@ -125,7 +122,6 @@ const getWeeklyProgress = async (userId: string) => {
 // Get monthly progress (last 6 months)
 const getMonthlyProgress = async (userId: string) => {
   const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const currentMonth = new Date().getMonth();
   
   const skills = await UserSkill.find({ user: userId });
   const completed = skills.filter(s => s.status === 'completed').length;
@@ -208,9 +204,6 @@ export const createGoal = async (req: AuthRequest, res: Response) => {
 // Update goal progress
 export const updateGoal = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const { current } = req.body;
-
     // Would update Goals model
     res.json({ message: 'Goal updated successfully' });
   } catch (error) {

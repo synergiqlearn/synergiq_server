@@ -114,7 +114,6 @@ const CouponSchema = new Schema<ICoupon>({
   code: {
     type: String,
     required: true,
-    unique: true,
     uppercase: true,
   },
   amount: {
@@ -143,7 +142,6 @@ const BlockchainCreditSchema = new Schema<IBlockchainCredit>({
   transactionId: {
     type: String,
     required: true,
-    unique: true,
   },
   amount: {
     type: Number,
